@@ -1,6 +1,21 @@
 #!/bin/sh
 set -e
 
+# Directory
+MARIADBD_DIR="/run/mysqld"
+SOCKET="${MARIADBD_DIR}/mysqld.sock"
+PID_FILE="${MARIADBD_DIR}/mysqld.pid"
+
+if [ -n "${MYSQL_PASSWORD_FILE:-}" ]; then
+	MYSQL_PASSWORD="$(cat "${MYSQL_PASSWORD_FILE}")"
+	export MYSQL_PASSWORD
+fi
+
+if [ -n "${MYSQL_ROOT_PASSWORD_FILE:-}" ]; then
+	MYSQL_ROOT_PASSWORD="$(cat "${MYSQL_ROOT_PASSWORD_FILE}")"
+	export MYSQL_ROOT_PASSWORD
+fi
+
 # Check environment vairables
 : "${MYSQL_DATABASE:?MYSQL_DATABASE is required}"
 : "${MYSQL_USER:?MYSQL_USER is required}"
@@ -8,8 +23,8 @@ set -e
 : "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
 
 # prepare the runtime directory, the directory needed for the runtime
-mkdir -p /run/mysqld
-chown mysql:mysql /run/mysqld
+mkdir -p "${MARIADBD_DIR}"
+chown mysql:mysql "${MARIADBD_DIR}"
 
 # initialize a new database if necessary
 if [ ! -d /var/lib/mysql/mysql ]; then
@@ -21,13 +36,13 @@ if [ ! -d /var/lib/mysql/mysql ]; then
 	mariadbd \
 		--user=mysql \
 		--datadir=/var/lib/mysql \
-		--socket=/run/mysql/mysqld.sock \
-		--pid-file=/run/mysqld/mysqld.pid \
+		--socket="${SOCKET}" \
+		--pid-file="${PID_FILE}" \
 		--skip-networking &
 	
 	i=0
 
-	while ! mariadb-admin --socket=/run/mysqld/mysqld.sock ping --silent; do
+	while ! mariadb-admin --socket="${SOCKET}" ping --silent; do
 		i=$((i+1))
 
 		if [ "$i" -ge 30 ]; then
@@ -41,7 +56,7 @@ if [ ! -d /var/lib/mysql/mysql ]; then
 
 	echo "Temporary MariaDB server is ready"
 
-	mariadb --socket=/run/mysqld/mysqld.sock <<WTF
+	mariadb --socket="${SOCKET}" <<WTF
 CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
 
 CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%'
@@ -52,9 +67,11 @@ GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.*
 
 ALTER USER 'root'@'localhost'
 	IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+
+FLUSH PRIVILEGES
 WTF
 	mariadb-admin \
-		--socket/run.mysqld/mysqld.sock \
+		--socket="${SOCKET}" \
 		-uroot \
 		-p"${MYSQL_ROOT_PASSWORD}" \
 		shutdown
