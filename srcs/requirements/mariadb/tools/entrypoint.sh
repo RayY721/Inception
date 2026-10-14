@@ -42,7 +42,11 @@ if [ ! -d /var/lib/mysql/mysql ]; then
 	
 	i=0
 
-	while ! mariadb-admin --socket="${SOCKET}" ping --silent; do
+	while ! mariadb-admin --no-defaults \
+		--protocol=socket \
+		--host=localhost \
+		--socket="${SOCKET}" \
+		-uroot ping --silent; do
 		i=$((i+1))
 
 		if [ "$i" -ge 30 ]; then
@@ -56,7 +60,11 @@ if [ ! -d /var/lib/mysql/mysql ]; then
 
 	echo "Temporary MariaDB server is ready"
 
-	mariadb --socket="${SOCKET}" <<WTF
+	mariadb --no-defaults \
+		--protocol=socket \
+		--host=localhost \
+		--socket="${SOCKET}" \
+		-uroot <<WTF
 CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
 
 CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%'
@@ -68,12 +76,14 @@ GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.*
 ALTER USER 'root'@'localhost'
 	IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
 
-FLUSH PRIVILEGES
+FLUSH PRIVILEGES;
 WTF
-	mariadb-admin \
+	MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" \
+	mariadb-admin --no-defaults \
+		--protocol=socket \
+		--host=localhost \
 		--socket="${SOCKET}" \
 		-uroot \
-		-p"${MYSQL_ROOT_PASSWORD}" \
 		shutdown
 fi
 

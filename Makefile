@@ -23,8 +23,11 @@ fclean: down
 
 re: fclean all
 
+init:
+	sh tools/init-config.sh
+
 up-mariadb:
 	mkdir -p $(WP_DATA) $(DB_DATA)
 	$(COMPOSE) up mariadb
 
-.PHONY: all up build down clean fclean re
+.PHONY: all up build down clean fclean re init up-mariadb
