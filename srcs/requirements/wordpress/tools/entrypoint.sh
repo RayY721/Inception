@@ -17,15 +17,24 @@ fi
 
 mkdir -p /run/php "$WP_PATH"
 
-until mariadb \
-	--host="$DB_HOST" \
-	--port="$DB_PORT" \
-	--user="$MYSQL_USER" \
-	--password="$MYSQL_PASSWORD" \
-	"$MYSQL_DATABASE" \
-	--execute="SELECT 1" >/dev/null 2>&1; do
-	echo "Waiting for MariaDB..."
-	sleep 2
+attempt=0
+
+until MYSQL_PWD="$MYSQL_PASSWORD" mariadb \
+    --host="$DB_HOST" \
+    --port="$DB_PORT" \
+    --user="$MYSQL_USER" \
+    "$MYSQL_DATABASE" \
+    --execute="SELECT 1" >/dev/null 2>&1; do
+
+    attempt=$((attempt + 1))
+
+    if [ "$attempt" -ge 30 ]; then
+        echo "MariaDB unavailable after 30 attempts" >&2
+        exit 1
+    fi
+
+    echo "Waiting for MariaDB ($attempt/30)..."
+    sleep 2
 done
 
 if [ ! -f "$WP_PATH/wp-config.php" ]; then

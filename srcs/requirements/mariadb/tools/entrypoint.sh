@@ -3,8 +3,7 @@ set -e
 
 # Directory
 MARIADBD_DIR="/run/mysqld"
-SOCKET="${MARIADBD_DIR}/mysqld.sock"
-PID_FILE="${MARIADBD_DIR}/mysqld.pid"
+INIT_PENDING=/var/lib/mysql/.init-pending
 
 if [ -n "${MYSQL_PASSWORD_FILE:-}" ]; then
 	MYSQL_PASSWORD="$(cat "${MYSQL_PASSWORD_FILE}")"
@@ -26,65 +25,33 @@ fi
 mkdir -p "${MARIADBD_DIR}"
 chown mysql:mysql "${MARIADBD_DIR}"
 
+if [ -f "$INIT_PENDING" ]; then
+    echo "Error: previous database initialization failed." >&2
+    echo "Check the logs and recover the data directory before restarting." >&2
+    exit 1
+fi
+
 # initialize a new database if necessary
 if [ ! -d /var/lib/mysql/mysql ]; then
+	touch "$INIT_PENDING"
 
 	mariadb-install-db \
 		--user=mysql \
-		--datadir=/var/lib/mysql
+		--datadir=/var/lib/mysql \
+		--skip-test-db
 
 	mariadbd \
 		--user=mysql \
 		--datadir=/var/lib/mysql \
-		--socket="${SOCKET}" \
-		--pid-file="${PID_FILE}" \
-		--skip-networking &
-	
-	i=0
-
-	while ! mariadb-admin --no-defaults \
-		--protocol=socket \
-		--host=localhost \
-		--socket="${SOCKET}" \
-		-uroot ping --silent; do
-		i=$((i+1))
-
-		if [ "$i" -ge 30 ]; then
-
-			echo "MariaDB failed to start"
-			exit 1
-		fi
-
-		sleep 1
-	done
-
-	echo "Temporary MariaDB server is ready"
-
-	mariadb --no-defaults \
-		--protocol=socket \
-		--host=localhost \
-		--socket="${SOCKET}" \
-		-uroot <<WTF
-CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
-
-CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%'
-	IDENTIFIED BY '${MYSQL_PASSWORD}';
-
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.*
-	TO '${MYSQL_USER}'@'%';
-
-ALTER USER 'root'@'localhost'
-	IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
-
+		--bootstrap <<SQL
 FLUSH PRIVILEGES;
-WTF
-	MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" \
-	mariadb-admin --no-defaults \
-		--protocol=socket \
-		--host=localhost \
-		--socket="${SOCKET}" \
-		-uroot \
-		shutdown
+CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
+CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+SQL
+
+	rm -f "$INIT_PENDING"
 fi
 
 exec "$@"
