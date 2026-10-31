@@ -10,12 +10,12 @@ NGINX is the only public entry point. It serves the site over HTTPS on port 443 
 
 ## Instructions
 
-> Complete these steps to match the finished implementation before using this README as setup documentation.
+Follow these steps to set up the project on a new virtual machine.
 
 1. Create a virtual machine and install Docker Engine, Docker Compose, and Make.
 2. Clone this repository in the virtual machine.
 3. Configure `kuyu.42.fr` to resolve to the virtual machine’s local IP address.
-4. Create `srcs/.env` with the configuration variables required by `srcs/docker-compose.yml`. Set `DOMAIN_NAME=kuyu.42.fr`.
+4. Create `srcs/.env` with the configuration variables required by `srcs/docker-compose.yml`. Set `WP_URL=https://kuyu.42.fr`.
 5. Create the required local secret files and keep them out of Git. Do not put passwords in Dockerfiles or committed configuration.
 6. Ensure the persistent data directories are available under `/home/kuyu/data`.
 7. From the repository root, build and start the stack:
